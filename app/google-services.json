@@ -1,0 +1,42 @@
+{
+  "project_info": {
+    "project_number": "520532512989",
+    "firebase_url": "https://camera-2c1a8.firebaseio.com",
+    "project_id": "camera-2c1a8",
+    "storage_bucket": "camera-2c1a8.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:520532512989:android:9eb4e2a2e0f10c94",
+        "android_client_info": {
+          "package_name": "tiget.camera"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "520532512989-k7f47pvolfski29gb731ok74fm41dpd4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCqlL-gmJXuGhJR67H_L0dyuT6FVZ3kiYw"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "status": 1
+        },
+        "appinvite_service": {
+          "status": 1,
+          "other_platform_oauth_client": []
+        },
+        "ads_service": {
+          "status": 2
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
