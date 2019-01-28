@@ -5,6 +5,7 @@ import android.graphics.SurfaceTexture;
 import android.os.Build;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.TextureView;
 import android.widget.Toast;
 
@@ -32,7 +33,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
 
-        //checkPermission();
+        //requestPermission();
         checkPermission();
 
 
@@ -45,8 +46,10 @@ public class MainActivity extends AppCompatActivity {
         mCameraPermission = checkSelfPermission(Manifest.permission.CAMERA);
         if(mCameraPermission == 0) {
             getSupportFragmentManager().beginTransaction().replace(R.id.f, new CameraFragment()).commit();
+            Log.e("fafjiafafia", "MainActivity granted");
         } else if(mCameraPermission == -1) {
             getSupportFragmentManager().beginTransaction().replace(R.id.f, new NoCameraPermissionFragment()).commit();
+            Log.e("fafjiafafia", "MainActivity denied");
             //Ну вообще тут надо requestPermission() делать
         }
     }

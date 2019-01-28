@@ -5,6 +5,7 @@ package tiget.camera;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.graphics.Bitmap;
+import android.graphics.Camera;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
@@ -36,6 +37,7 @@ import android.widget.Toast;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.firebase.ml.vision.FirebaseVision;
 import com.google.firebase.ml.vision.common.FirebaseVisionImage;
+import com.google.firebase.ml.vision.common.FirebaseVisionImageMetadata;
 import com.google.firebase.ml.vision.face.FirebaseVisionFace;
 import com.google.firebase.ml.vision.face.FirebaseVisionFaceDetector;
 import com.google.firebase.ml.vision.face.FirebaseVisionFaceDetectorOptions;
@@ -49,8 +51,10 @@ import com.karumi.dexter.listener.PermissionGrantedResponse;
 import com.karumi.dexter.listener.PermissionRequest;
 import com.karumi.dexter.listener.single.PermissionListener;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.GregorianCalendar;
 import java.util.List;
 
 import static android.content.Context.CAMERA_SERVICE;
@@ -62,20 +66,25 @@ import static android.hardware.camera2.CameraMetadata.LENS_FACING_FRONT;
 import static java.lang.System.currentTimeMillis;
 import static tiget.camera.FaceView.AngleY;
 import static tiget.camera.FaceView.AngleZ;
+import static tiget.camera.FaceView.LandmarkX;
+import static tiget.camera.FaceView.LandmarkY;
 import static tiget.camera.FaceView.LeftEyeOpenedProb;
 import static tiget.camera.FaceView.RightEyeOpenedProb;
 import static tiget.camera.FaceView.SmilingProb;
+import static tiget.camera.ImageClassifier.DIM_IMG_SIZE_X;
+import static tiget.camera.ImageClassifier.DIM_IMG_SIZE_Y;
 
 public class CameraFragment extends Fragment {
 
     public static final String TAG = CameraFragment.class.getSimpleName();
 
-    private static final float FACE_IMAGE_SCALE = 0.3f; // во сколько раз нужно уменьшить картинку с камеры для детектора лиц
+    //private static final float FACE_IMAGE_SCALE = 0.3f; // во сколько раз нужно уменьшить картинку с камеры для детектора лиц
 
     private TextureView mTextureView; // для превью с камеры
     private FaceView mFaceView; // для контуров лиц
     private TextView mTextView; // для результата Image Labeling
     ImageView mChangeCameraButton;
+
 
     private HandlerThread mBackgroundThread;
     private Handler mBackgroundHandler;
@@ -85,10 +94,20 @@ public class CameraFragment extends Fragment {
 
     CameraCharacteristics characteristics;
     CameraManager cameraManager;
-
-    int cameraId = LENS_FACING_FRONT;
+    CameraDevice mCamera;
 
     int mCameraPermission;
+
+    int FrontCameraId = LENS_FACING_FRONT;
+    int BackCameraId = LENS_FACING_BACK;
+
+    private String backCameraTag = "BACK_CAMERA";
+    private String frontCameraTag = "FRONT_CAMERA";
+
+
+
+
+    ImageClassifier mImageClassifier;
 
 
     public CameraFragment() {
@@ -107,6 +126,23 @@ public class CameraFragment extends Fragment {
         mFaceView = view.findViewById(R.id.face_view);
         mTextView = view.findViewById(R.id.text_view);
         mChangeCameraButton = view.findViewById(R.id.changeCamera);
+
+        mChangeCameraButton.setTag(backCameraTag);
+        mChangeCameraButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if(mChangeCameraButton.getTag().equals(backCameraTag)) {
+                    mCamera.close();
+                    openCamera(LENS_FACING_FRONT);
+                    mChangeCameraButton.setTag(frontCameraTag);
+                } else if(mChangeCameraButton.getTag().equals(frontCameraTag)) {
+                    mCamera.close();
+                    openCamera(LENS_FACING_BACK);
+                    mChangeCameraButton.setTag(backCameraTag);
+                }
+
+            }
+        });
     }
 
 
@@ -115,22 +151,19 @@ public class CameraFragment extends Fragment {
     public void onResume() {
         super.onResume();
 
-
         mCameraPermission = getActivity().checkSelfPermission(Manifest.permission.CAMERA);
 
         if(mCameraPermission == 0) {
-            initializeFirebaseLabelDetector();
-            initializeFirebaseFaceDetector();
-
             if (mTextureView.isAvailable()) {
                 startThread();
-                openCamera(cameraId);
+                openCamera(BackCameraId);
             } else {
+
                 mTextureView.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
                     @Override
                     public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
                         startThread();
-                        openCamera(cameraId);
+                        openCamera(BackCameraId);
                     }
                     @Override public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
                     }
@@ -142,16 +175,19 @@ public class CameraFragment extends Fragment {
                     }
                 });
             }
+
         } else if(mCameraPermission == -1) {
             getActivity().getSupportFragmentManager().beginTransaction().replace(R.id.f, new NoCameraPermissionFragment()).commit();
         }
 
-
+        //initFirebaseLabelDetector();
+        //initFirebaseFaceDetector();
+        initTenserflowDetecter();
 
     }
 
 
-    private void initializeFirebaseLabelDetector() {
+    private void initFirebaseLabelDetector() {
         // создаём настройки
         final FirebaseVisionLabelDetectorOptions options =
                 new FirebaseVisionLabelDetectorOptions.Builder()
@@ -163,20 +199,70 @@ public class CameraFragment extends Fragment {
     }
 
 
-    private void initializeFirebaseFaceDetector() {
+    private void initFirebaseFaceDetector() {
         // настраиваем детектор лиц
         FirebaseVisionFaceDetectorOptions options =
                 new FirebaseVisionFaceDetectorOptions.Builder()
                         .setContourMode(FirebaseVisionFaceDetectorOptions.ALL_CONTOURS)
-//                        .setClassificationMode(FirebaseVisionFaceDetectorOptions.NO_CLASSIFICATIONS)
-//                        .setLandmarkMode(FirebaseVisionFaceDetectorOptions.NO_LANDMARKS)
-//                        .setMinFaceSize(0.1f)
-//                        .setPerformanceMode(FirebaseVisionFaceDetectorOptions.FAST)
+                        .setClassificationMode(FirebaseVisionFaceDetectorOptions.ALL_CLASSIFICATIONS)
+                        .setLandmarkMode(FirebaseVisionFaceDetectorOptions.NO_LANDMARKS)
+                        .setMinFaceSize(0.1f)
+                        .setPerformanceMode(FirebaseVisionFaceDetectorOptions.FAST)
                         .build();
         // создаём детектор лиц
         mFirebaseFaceDetector = FirebaseVision.getInstance()
                 .getVisionFaceDetector(options);
     }
+
+
+
+    private void initTenserflowDetecter() {
+        try {
+            mImageClassifier = new ImageClassifier(getActivity());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+
+    private boolean mClassifierStarted;
+
+    final Runnable mClassifierRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (mClassifierStarted) {
+                final Bitmap bitmap = mTextureView.getBitmap(DIM_IMG_SIZE_X, DIM_IMG_SIZE_Y);
+                final String result = mImageClassifier.classifyFrame(bitmap);
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            mTextView.setText(result);
+                        }
+                    });
+                }
+                mBackgroundHandler.post(mClassifierRunnable);
+            }
+        }
+    };
+
+    private void startClassifier() {
+        if (!mClassifierStarted) {
+            mClassifierStarted = true;
+            mBackgroundHandler.post(mClassifierRunnable);
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -234,8 +320,8 @@ public class CameraFragment extends Fragment {
                     , new CameraCaptureSession.CaptureCallback() {
                         @Override
                         public void onCaptureStarted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, long timestamp, long frameNumber) {
-                            startFirebaseLabelDetecting();
-                            startFirebaseFaceDetecting();
+                            //startFirebaseLabelDetecting();
+//                            startFirebaseFaceDetecting();
                         }
                     }
                     , mBackgroundHandler);
@@ -294,31 +380,46 @@ public class CameraFragment extends Fragment {
         final long now = currentTimeMillis(); // запоминаем время старта обработки
         Bitmap bitmap = mTextureView.getBitmap(); // получаем битмап из TextureView
         // сжимаем картинку, чтобы обработка проходила быстрее
+
+        int width = 400;
+        final float scale = (float) width / bitmap.getWidth();
+        int height = (int) (bitmap.getHeight() * scale);
+
+
         bitmap = Bitmap.createScaledBitmap(bitmap
-                , (int) (bitmap.getWidth() * FACE_IMAGE_SCALE)
-                , (int) (bitmap.getHeight() * FACE_IMAGE_SCALE)
+                , width
+                , height
                 , true);
-        FirebaseVisionImage image = FirebaseVisionImage.fromBitmap(bitmap); // преобразовываем в нужный формат
+
+        byte[] bytes = getYV12(width, height, bitmap);
+
+       FirebaseVisionImageMetadata metadata = new FirebaseVisionImageMetadata.Builder().setFormat(FirebaseVisionImageMetadata.IMAGE_FORMAT_YV12).setWidth(width).setHeight(height).build();
+
+
+        FirebaseVisionImage image = FirebaseVisionImage.fromByteArray(bytes, metadata); // преобразовываем в нужный формат
+
         mFirebaseFaceDetector.detectInImage(image) // запускаем детектирование
                 .addOnSuccessListener(new OnSuccessListener<List<FirebaseVisionFace>>() {
                     @Override
                     public void onSuccess(List<FirebaseVisionFace> firebaseFaces) {
                         Log.v(TAG, "processFirebaseFaceDetecting: time=" + (currentTimeMillis() - now) + "ms\n");
                         // рисуем контуры лиц
-                        mFaceView.showFaces(firebaseFaces, 1 / FACE_IMAGE_SCALE);
+                        //mFaceView.showFaces(firebaseFaces, 1 / FACE_IMAGE_SCALE);
+                        mFaceView.showFaces(firebaseFaces, 1 / scale);
                         processFirebaseFaceDetecting();
 
-                        mTextView.setText(LeftEyeOpenedProb() + " / " + RightEyeOpenedProb() + " / " + SmilingProb() + "\n" + AngleY() + " / " + AngleZ());
+
+                        if (firebaseFaces.size() > 0) {
+                            FirebaseVisionFace face = firebaseFaces.get(0);
+                            mTextView.setText(face.getSmilingProbability() + " / " + face.getLeftEyeOpenProbability() + " / " + face.getRightEyeOpenProbability());
+
+                        }
+
+
                     }
                 });
 
     }
-
-
-
-
-
-
 
 
 
@@ -350,6 +451,7 @@ public class CameraFragment extends Fragment {
                     cameraManager.openCamera(cameraId, new CameraDevice.StateCallback() {
                         @Override
                         public void onOpened(@NonNull CameraDevice camera) {
+                            mCamera = camera;
                             captureCamera(camera);
                         }
 
@@ -359,11 +461,74 @@ public class CameraFragment extends Fragment {
                         }
 
                         @Override
-                        public void onError(@NonNull CameraDevice camera, int error) { }
+                        public void onError(@NonNull CameraDevice camera, int error) {
+                            Log.v(TAG, "onError: error=" + error);
+                        }
                     }, mBackgroundHandler);
                 }
             } catch (CameraAccessException e) {
                 Log.e(TAG, "openCamera", e);
+            }
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+    private byte [] getYV12(int inputWidth, int inputHeight, Bitmap scaled) {
+
+        int [] argb = new int[inputWidth * inputHeight];
+
+        scaled.getPixels(argb, 0, inputWidth, 0, 0, inputWidth, inputHeight);
+
+        byte [] yuv = new byte[inputHeight * inputWidth + 2 * (int) Math.ceil(inputHeight/2.0) *(int) Math.ceil(inputWidth/2.0)];
+        encodeYV12(yuv, argb, inputWidth, inputHeight);
+
+        scaled.recycle();
+
+        return yuv;
+    }
+
+    private void encodeYV12(byte[] yuv420sp, int[] argb, int width, int height) {
+        final int frameSize = width * height;
+
+        int yIndex = 0;
+        int uIndex = frameSize;
+        int vIndex = frameSize + (frameSize / 4);
+
+        int a, R, G, B, Y, U, V;
+        int index = 0;
+        for (int j = 0; j < height; j++) {
+            for (int i = 0; i < width; i++) {
+
+                a = (argb[index] & 0xff000000) >> 24; // a is not used obviously
+                R = (argb[index] & 0xff0000) >> 16;
+                G = (argb[index] & 0xff00) >> 8;
+                B = (argb[index] & 0xff) >> 0;
+
+                // well known RGB to YUV algorithm
+                Y = ( (  66 * R + 129 * G +  25 * B + 128) >> 8) +  16;
+                U = ( ( -38 * R -  74 * G + 112 * B + 128) >> 8) + 128;
+                V = ( ( 112 * R -  94 * G -  18 * B + 128) >> 8) + 128;
+
+                // YV12 has a plane of Y and two chroma plans (U, V) planes each sampled by a factor of 2
+                //    meaning for every 4 Y pixels there are 1 V and 1 U.  Note the sampling is every other
+                //    pixel AND every other scanline.
+                yuv420sp[yIndex++] = (byte) ((Y < 0) ? 0 : ((Y > 255) ? 255 : Y));
+                if (j % 2 == 0 && index % 2 == 0) {
+                    yuv420sp[uIndex++] = (byte)((V<0) ? 0 : ((V > 255) ? 255 : V));
+                    yuv420sp[vIndex++] = (byte)((U<0) ? 0 : ((U > 255) ? 255 : U));
+                }
+
+                index ++;
             }
         }
     }

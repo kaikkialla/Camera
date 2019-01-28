@@ -29,6 +29,14 @@ dependencies {
     implementation 'com.google.firebase:firebase-ml-vision:18.0.2'
     implementation 'com.google.firebase:firebase-ml-vision-image-label-model:17.0.2'
     implementation 'com.google.firebase:firebase-ml-vision-face-model:17.0.2'
+
+
+    //noinspection GradleDynamicVersion
+    implementation 'org.tensorflow:tensorflow-android:+'
+    //noinspection GradleDynamicVersion
+    implementation 'org.tensorflow:tensorflow-lite:+'
 }
+
+
 
 apply plugin: 'com.google.gms.google-services'

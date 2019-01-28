@@ -11,9 +11,11 @@ import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
 
+import com.google.android.gms.vision.face.Landmark;
 import com.google.firebase.ml.vision.common.FirebaseVisionPoint;
 import com.google.firebase.ml.vision.face.FirebaseVisionFace;
 import com.google.firebase.ml.vision.face.FirebaseVisionFaceContour;
+import com.google.firebase.ml.vision.face.FirebaseVisionFaceLandmark;
 
 import java.util.List;
 
@@ -46,12 +48,13 @@ public class FaceView extends View {
 
     private float mScale; // во сколько раз нужно увеличить те faces, который отдал ML Kit
 
-    private float mStrokeWidth = 7;//ширина контура
+    private float mStrokeWidth = 10;//ширина контура
     private int mStrokeAlpha = 255;
 
 
-    private float mFaceRadius= 6;//ширина контура
+    private float mFaceRadius= 20;//радиус точек
     private int mFaceAlpha = 255;
+    float faceDotsScale;
 
 
 
@@ -70,7 +73,7 @@ public class FaceView extends View {
 
     private String ColorPink = "#fca5ff";
 
-    private String ColorDarkGreen = "#0d682d";
+    private String ColorDarkGreen = "#1ecc5b";
     private String ColorLightGreen = "#72ffa3";
 
 
@@ -82,31 +85,41 @@ public class FaceView extends View {
     public static  float AngleY;
     public static float AngleZ;
 
+    public static float LandmarkX;
+    public static float LandmarkY;
+
+    public float faceWidth;
+    public float faceHeight;
+
+
+
 
 
 
 
     public FaceView(Context context) {
         super(context);
-        initialize();
+        initColors();
+        initPaints();
+
     }
 
     public FaceView(Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
         initColors();
-        initialize();
+        initPaints();
     }
 
     public FaceView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         initColors();
-        initialize();
+        initPaints();
     }
 
     public FaceView(Context context, @Nullable AttributeSet attrs, int defStyleAttr, int defStyleRes) {
         super(context, attrs, defStyleAttr, defStyleRes);
         initColors();
-        initialize();
+        initPaints();
     }
 
 
@@ -137,7 +150,10 @@ public class FaceView extends View {
 
 
 
-    private void initialize() {
+
+
+
+    private void initPaints() {
 
         mStrokePaint = new Paint();
         mFacePaint = new Paint();
@@ -145,11 +161,9 @@ public class FaceView extends View {
 
         mStrokePaint.setFlags(Paint.ANTI_ALIAS_FLAG);
         mStrokePaint.setStyle(Paint.Style.STROKE);
-        mStrokePaint.setStrokeWidth(mStrokeWidth);
+        mStrokePaint.setStrokeWidth(mStrokeWidth / faceDotsScale);
         mStrokePaint.setColor(ColorPrimary);
         mStrokePaint.setAlpha(mStrokeAlpha);
-
-
 
 
 
@@ -160,16 +174,6 @@ public class FaceView extends View {
 
     }
 
-
-
-
-    @Override
-    protected void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
-        //drawStroke(canvas);
-
-        drawAll(canvas);
-    }
 
 
 
@@ -185,7 +189,6 @@ public class FaceView extends View {
                 LeftEyeOpenedProb = face.getLeftEyeOpenProbability();
             }
         }
-
         return LeftEyeOpenedProb;
     }
 
@@ -230,8 +233,36 @@ public class FaceView extends View {
     }
 
 
-/*
-    private void drawFace(Canvas canvas, int part, int color) {
+    public void getLandmark() {
+        if (mFaces != null) {
+            for (FirebaseVisionFace face : mFaces) {
+
+            }
+        }
+    }
+
+
+
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        //drawStroke(canvas);
+
+        getFaceSize(canvas);
+        drawAll(canvas);
+    }
+
+
+
+
+
+    /*
+    @part - часть, которую надо отрисовать
+    @shape - тип(0 - ломанная, 1 - замкнутая
+    @color - цвет части(точки и линии)
+     */
+    private void drawFace(Canvas canvas, int part, int shape, int color) {
         mFacePaint.setColor(color);
 
         if (mFaces != null) {
@@ -239,35 +270,54 @@ public class FaceView extends View {
                 final FirebaseVisionFaceContour contour = face.getContour(part);
                 List<FirebaseVisionPoint> points = contour.getPoints();
 
-                for(FirebaseVisionPoint point : points) {
-                    canvas.drawCircle(point.getX() * mScale, point.getY() * mScale, mFaceRadius, mFacePaint);
+
+                if(shape == 0) {//Ломанная
+                    //Рисуем опорные точки
+                    for (int point = 0; point < points.size(); point++) {
+                        canvas.drawCircle(points.get(point).getX() * mScale,
+                                points.get(point).getY() * mScale,
+                                mFaceRadius / faceDotsScale,
+                                mFacePaint);
+                    }
+                    //Соединяем их
+                    for (int point = 0; point < points.size() - 1; point++) {
+                        canvas.drawLine(points.get(point).getX() * mScale,
+                                points.get(point).getY() * mScale,
+                                points.get(point + 1).getX() * mScale,
+                                points.get(point + 1).getY() * mScale,
+                                mFacePaint);
+                    }
+
+
+                } else if(shape == 1) {//Замкнутая
+                    //Рисуем опорные точки
+                    for (int point = 0; point < points.size(); point++) {
+                        canvas.drawCircle(points.get(point).getX() * mScale,
+                                points.get(point).getY() * mScale,
+                                mFaceRadius / faceDotsScale,
+                                mFacePaint);
+                    }
+                    //Соединяем их
+                    for (int point = 0; point < points.size() - 1; point++) {
+                        canvas.drawLine(points.get(point).getX() * mScale,
+                                points.get(point).getY() * mScale,
+                                points.get(point + 1).getX() * mScale,
+                                points.get(point + 1).getY() * mScale,
+                                mFacePaint);
+                    }
+                    //Соединяем первую и последнюю
+                    canvas.drawLine(points.get(0).getX() * mScale,
+                            points.get(0).getY() * mScale,
+                            points.get(points.size() - 1).getX() * mScale,
+                            points.get(points.size() - 1).getY() * mScale,
+                            mFacePaint);
                 }
+
             }
         }
     }
-*/
 
 
-
-    private void drawFace(Canvas canvas, int part, int color) {
-        mFacePaint.setColor(color);
-
-        if (mFaces != null) {
-            for (FirebaseVisionFace face : mFaces) {
-                final FirebaseVisionFaceContour contour = face.getContour(part);
-                List<FirebaseVisionPoint> points = contour.getPoints();
-
-                //Рисуем опорные точки
-                for (int point = 0; point < points.size(); point++) {
-                    canvas.drawCircle(points.get(point).getX() * mScale, points.get(point).getY() * mScale, mFaceRadius, mFacePaint);
-                }
-                //Соединяем их
-                for (int point = 0; point < points.size() - 1; point++) {
-                    canvas.drawLine(points.get(point).getX() * mScale, points.get(point).getY() * mScale, points.get(point + 1).getX() * mScale, points.get(point + 1).getY() * mScale, mFacePaint);
-                }
-            }
-        }
-    }
 
 
     private void drawStroke(Canvas canvas) {
@@ -285,33 +335,49 @@ public class FaceView extends View {
 
 
 
+    private void getFaceSize(Canvas canvas) {
+        if (mFaces != null) {
+            for (FirebaseVisionFace face : mFaces) {
+                final Rect boundingBox = face.getBoundingBox();
+                faceHeight = boundingBox.height();
+                faceWidth = boundingBox.width();
+                faceDotsScale = (float) canvas.getWidth() / faceWidth;
+            }
+        }
+    }
+
+
 
 
 
     void drawAll(Canvas canvas) {
-        drawFace(canvas, FACE, Color.parseColor(ColorPink));//Контур лица
+        getLandmark();
+
+        drawFace(canvas, FACE, 1, Color.parseColor(ColorPink));//Контур лица
 
         //Глаза
-        drawFace(canvas, LEFT_EYE, Color.parseColor(ColorLightGreen));//Левый глаз
-        drawFace(canvas, RIGHT_EYE, Color.parseColor(ColorDarkGreen));//Правый глаз
+        drawFace(canvas, LEFT_EYE, 1, Color.parseColor(ColorLightGreen));//Левый глаз
+        drawFace(canvas, RIGHT_EYE, 1, Color.parseColor(ColorDarkGreen));//Правый глаз
 
 
         //Губы
-        drawFace(canvas, LOWER_LIP_TOP, Color.parseColor(ColorBlue));//Низ нижней губы
-        drawFace(canvas, LOWER_LIP_BOTTOM, Color.parseColor(ColorBlue));//Верх нижней губы
+        drawFace(canvas, LOWER_LIP_TOP, 0, Color.parseColor(ColorBlue));//Низ нижней губы
+        drawFace(canvas, LOWER_LIP_BOTTOM, 0, Color.parseColor(ColorBlue));//Верх нижней губы
 
-        drawFace(canvas, UPPER_LIP_TOP, Color.parseColor(ColorDarkBlue) );//Верх верхней губы
-        drawFace(canvas, UPPER_LIP_BOTTOM, Color.parseColor(ColorDarkBlue));//Низ верхней губы
+        drawFace(canvas, UPPER_LIP_TOP,0,  Color.parseColor(ColorDarkBlue) );//Верх верхней губы
+        drawFace(canvas, UPPER_LIP_BOTTOM,0,  Color.parseColor(ColorDarkBlue));//Низ верхней губы
+
 
         //Нос
-        drawFace(canvas, NOSE_BOTTOM, Color.parseColor(ColorPurple));//Ноздри
-        drawFace(canvas, NOSE_BRIDGE, Color.parseColor(ColorRed));//Переносица и кончик носа
+        drawFace(canvas, NOSE_BOTTOM, 0, Color.parseColor(ColorPurple));//Ноздри
+        drawFace(canvas, NOSE_BRIDGE, 0, Color.parseColor(ColorRed));//Переносица и кончик носа
+
 
         //Брови
-        drawFace(canvas, LEFT_EYEBROW_TOP, Color.parseColor(ColorYellow));//Верх левой брови
-        drawFace(canvas, LEFT_EYEBROW_BOTTOM, Color.parseColor(ColorYellow));//Низ левой брови
-        drawFace(canvas, RIGHT_EYEBROW_TOP, Color.parseColor(ColorOrange));//Верх правой брови
-        drawFace(canvas, RIGHT_EYEBROW_BOTTOM, Color.parseColor(ColorOrange));//Низ правой брови
+        drawFace(canvas, LEFT_EYEBROW_TOP, 0, Color.parseColor(ColorYellow));//Верх левой брови
+        drawFace(canvas, LEFT_EYEBROW_BOTTOM, 0, Color.parseColor(ColorYellow));//Низ левой брови
+        drawFace(canvas, RIGHT_EYEBROW_TOP, 0, Color.parseColor(ColorOrange));//Верх правой брови
+        drawFace(canvas, RIGHT_EYEBROW_BOTTOM, 0, Color.parseColor(ColorOrange));//Низ правой брови
 
     }
 }
