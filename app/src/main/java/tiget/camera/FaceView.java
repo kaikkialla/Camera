@@ -312,6 +312,6 @@ public class FaceView extends View {
         drawFace(canvas, LEFT_EYEBROW_BOTTOM, Color.parseColor(ColorYellow));//Низ левой брови
         drawFace(canvas, RIGHT_EYEBROW_TOP, Color.parseColor(ColorOrange));//Верх правой брови
         drawFace(canvas, RIGHT_EYEBROW_BOTTOM, Color.parseColor(ColorOrange));//Низ правой брови
-        
+
     }
 }

@@ -12,11 +12,14 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
+import android.media.Image;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 
 
 import android.support.v4.app.Fragment;
@@ -26,7 +29,9 @@ import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.firebase.ml.vision.FirebaseVision;
@@ -70,12 +75,21 @@ public class CameraFragment extends Fragment {
     private TextureView mTextureView; // для превью с камеры
     private FaceView mFaceView; // для контуров лиц
     private TextView mTextView; // для результата Image Labeling
+    ImageView mChangeCameraButton;
 
     private HandlerThread mBackgroundThread;
     private Handler mBackgroundHandler;
 
     private FirebaseVisionLabelDetector mFirebaseLabelDetector; // детектор предметов
     private FirebaseVisionFaceDetector mFirebaseFaceDetector; // детектор лиц
+
+    CameraCharacteristics characteristics;
+    CameraManager cameraManager;
+
+    int cameraId = LENS_FACING_FRONT;
+
+    int mCameraPermission;
+
 
     public CameraFragment() {
         // stub
@@ -92,34 +106,50 @@ public class CameraFragment extends Fragment {
         mTextureView = view.findViewById(R.id.texture_view);
         mFaceView = view.findViewById(R.id.face_view);
         mTextView = view.findViewById(R.id.text_view);
+        mChangeCameraButton = view.findViewById(R.id.changeCamera);
     }
 
+
+    @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
     public void onResume() {
         super.onResume();
 
-        initializeFirebaseLabelDetector();
-        initializeFirebaseFaceDetector();
 
-        if (mTextureView.isAvailable()) {
-            checkPermission();
-        } else {
-            mTextureView.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
-                @Override
-                public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-                    checkPermission();
-                }
-                @Override public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
-                }
-                @Override public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
-                    return false;
-                }
-                @Override public void onSurfaceTextureUpdated(SurfaceTexture surface) {
+        mCameraPermission = getActivity().checkSelfPermission(Manifest.permission.CAMERA);
 
-                }
-            });
+        if(mCameraPermission == 0) {
+            initializeFirebaseLabelDetector();
+            initializeFirebaseFaceDetector();
+
+            if (mTextureView.isAvailable()) {
+                startThread();
+                openCamera(cameraId);
+            } else {
+                mTextureView.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
+                    @Override
+                    public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
+                        startThread();
+                        openCamera(cameraId);
+                    }
+                    @Override public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
+                    }
+                    @Override public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
+                        return false;
+                    }
+                    @Override public void onSurfaceTextureUpdated(SurfaceTexture surface) {
+
+                    }
+                });
+            }
+        } else if(mCameraPermission == -1) {
+            getActivity().getSupportFragmentManager().beginTransaction().replace(R.id.f, new NoCameraPermissionFragment()).commit();
         }
+
+
+
     }
+
 
     private void initializeFirebaseLabelDetector() {
         // создаём настройки
@@ -131,6 +161,7 @@ public class CameraFragment extends Fragment {
         mFirebaseLabelDetector = FirebaseVision.getInstance()
                 .getVisionLabelDetector(options);
     }
+
 
     private void initializeFirebaseFaceDetector() {
         // настраиваем детектор лиц
@@ -148,22 +179,8 @@ public class CameraFragment extends Fragment {
     }
 
 
-    private void checkPermission() {
-        Dexter.withActivity(getActivity())
-                .withPermission(Manifest.permission.CAMERA)
-                .withListener(new PermissionListener() {
-                    @Override public void onPermissionGranted(PermissionGrantedResponse response) {
-                        startThread();
-                        openCamera();
-                    }
-                    @Override public void onPermissionDenied(PermissionDeniedResponse response) {
-                        // TODO show message
-                    }
-                    @Override public void onPermissionRationaleShouldBeShown(PermissionRequest permission, PermissionToken token) {
-                        // TODO show message
-                    }
-                }).check();
-    }
+
+
 
     private void startThread() {
         // создаём поток
@@ -175,50 +192,6 @@ public class CameraFragment extends Fragment {
     }
 
 
-    @SuppressLint("MissingPermission")
-    private void openCamera() {
-        // получаем CameraManager
-        final CameraManager cameraManager = (CameraManager) getActivity().getSystemService(CAMERA_SERVICE);
-        if (cameraManager != null) { // система может отдать null вместо cameraManager
-            try {
-                // получаем идентификаторы камеры
-                final String[] cameraIds = cameraManager.getCameraIdList();
-                // перебираем их
-                Log.v(TAG, "cameraIds=" + Arrays.toString(cameraIds));
-                String backCameraId = null;
-                for (String cameraId : cameraIds) {
-                    // получаем характеристики камеры
-                    final CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraId);
-                    if (characteristics.get(LENS_FACING) == LENS_FACING_FRONT) {
-                        backCameraId = cameraId;
-                        break;
-                    }
-                }
-
-                // открываем камеру (если нашли заднюю)
-                if (backCameraId != null) {
-                    cameraManager.openCamera(backCameraId, new CameraDevice.StateCallback() {
-                        @Override
-                        public void onOpened(@NonNull CameraDevice camera) {
-                            captureCamera(camera);
-                        }
-
-                        @Override
-                        public void onDisconnected(@NonNull CameraDevice camera) {
-                            camera.close();
-                        }
-
-                        @Override
-                        public void onError(@NonNull CameraDevice camera, int error) {
-                            Log.e(TAG, "openCamera: error=" + error);
-                        }
-                    }, mBackgroundHandler);
-                }
-            } catch (CameraAccessException e) {
-                Log.e(TAG, "openCamera", e);
-            }
-        }
-    }
 
 
     private void captureCamera( final CameraDevice camera) {
@@ -237,7 +210,6 @@ public class CameraFragment extends Fragment {
                             // когда сессия настроена - запускаем превью с камеры
                             startRecord(camera, session, surface);
                         }
-
                         @Override
                         public void onConfigureFailed(@NonNull CameraCaptureSession session) {
                             // TODO показать ошибку
@@ -271,6 +243,7 @@ public class CameraFragment extends Fragment {
             Log.e(TAG, "captureCamera", e);
         }
     }
+
 
     private boolean mFirebaseLabelDetectingStarted = false;
     private boolean mFirebaseFaceDetectingStarted = false;
@@ -316,6 +289,7 @@ public class CameraFragment extends Fragment {
         }
     }
 
+
     private void processFirebaseFaceDetecting() {
         final long now = currentTimeMillis(); // запоминаем время старта обработки
         Bitmap bitmap = mTextureView.getBitmap(); // получаем битмап из TextureView
@@ -334,11 +308,64 @@ public class CameraFragment extends Fragment {
                         mFaceView.showFaces(firebaseFaces, 1 / FACE_IMAGE_SCALE);
                         processFirebaseFaceDetecting();
 
-
                         mTextView.setText(LeftEyeOpenedProb() + " / " + RightEyeOpenedProb() + " / " + SmilingProb() + "\n" + AngleY() + " / " + AngleZ());
                     }
                 });
 
+    }
+
+
+
+
+
+
+
+
+
+
+    @SuppressLint("MissingPermission")
+    private void openCamera(int camera) {
+        // получаем CameraManager
+        cameraManager = (CameraManager) getActivity().getSystemService(CAMERA_SERVICE);
+        if (cameraManager != null) { // система может отдать null вместо cameraManager
+            try {
+                // получаем идентификаторы камеры
+                final String[] cameraIds = cameraManager.getCameraIdList();
+                // перебираем их
+
+
+                String cameraId = null;
+                for (String i : cameraIds) {
+                    // получаем характеристики камеры
+                    characteristics = cameraManager.getCameraCharacteristics(i);
+                    if (characteristics.get(LENS_FACING) == camera) {
+                        cameraId = i;
+                        break;
+                    }
+                }
+
+
+                // открываем камеру (если нашли заднюю)
+                if (cameraId != null) {
+                    cameraManager.openCamera(cameraId, new CameraDevice.StateCallback() {
+                        @Override
+                        public void onOpened(@NonNull CameraDevice camera) {
+                            captureCamera(camera);
+                        }
+
+                        @Override
+                        public void onDisconnected(@NonNull CameraDevice camera) {
+                            camera.close();
+                        }
+
+                        @Override
+                        public void onError(@NonNull CameraDevice camera, int error) { }
+                    }, mBackgroundHandler);
+                }
+            } catch (CameraAccessException e) {
+                Log.e(TAG, "openCamera", e);
+            }
+        }
     }
 
 }
