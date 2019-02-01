@@ -33,10 +33,9 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
 
-        //requestPermission();
-        checkPermission();
-
-
+        //getSupportFragmentManager().beginTransaction().replace(R.id.f, new PhoneInfo()).commit();
+        requestPermission();
+        //checkPermission();
 
 
     }
@@ -54,13 +53,14 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-
+/*
     @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
     protected void onResume() {
         super.onResume();
         checkPermission();
     }
+    */
 
     public void requestPermission() {
         Dexter.withActivity(this)
@@ -79,6 +79,5 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }).check();
     }
-
 
 }

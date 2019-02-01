@@ -11,17 +11,14 @@ import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
 
-import com.google.android.gms.vision.face.Landmark;
 import com.google.firebase.ml.vision.common.FirebaseVisionPoint;
 import com.google.firebase.ml.vision.face.FirebaseVisionFace;
 import com.google.firebase.ml.vision.face.FirebaseVisionFaceContour;
-import com.google.firebase.ml.vision.face.FirebaseVisionFaceLandmark;
 
 import java.util.List;
 
 import androidx.annotation.Nullable;
 
-import static com.google.firebase.ml.vision.face.FirebaseVisionFaceContour.ALL_POINTS;
 import static com.google.firebase.ml.vision.face.FirebaseVisionFaceContour.FACE;
 import static com.google.firebase.ml.vision.face.FirebaseVisionFaceContour.LEFT_EYE;
 import static com.google.firebase.ml.vision.face.FirebaseVisionFaceContour.LEFT_EYEBROW_BOTTOM;
@@ -161,7 +158,7 @@ public class FaceView extends View {
 
         mStrokePaint.setFlags(Paint.ANTI_ALIAS_FLAG);
         mStrokePaint.setStyle(Paint.Style.STROKE);
-        mStrokePaint.setStrokeWidth(mStrokeWidth / faceDotsScale);
+        mStrokePaint.setStrokeWidth(mStrokeWidth);
         mStrokePaint.setColor(ColorPrimary);
         mStrokePaint.setAlpha(mStrokeAlpha);
 
@@ -233,13 +230,6 @@ public class FaceView extends View {
     }
 
 
-    public void getLandmark() {
-        if (mFaces != null) {
-            for (FirebaseVisionFace face : mFaces) {
-
-            }
-        }
-    }
 
 
 
@@ -272,45 +262,64 @@ public class FaceView extends View {
 
 
                 if(shape == 0) {//Ломанная
-                    //Рисуем опорные точки
-                    for (int point = 0; point < points.size(); point++) {
-                        canvas.drawCircle(points.get(point).getX() * mScale,
-                                points.get(point).getY() * mScale,
-                                mFaceRadius / faceDotsScale,
-                                mFacePaint);
-                    }
-                    //Соединяем их
-                    for (int point = 0; point < points.size() - 1; point++) {
-                        canvas.drawLine(points.get(point).getX() * mScale,
-                                points.get(point).getY() * mScale,
-                                points.get(point + 1).getX() * mScale,
-                                points.get(point + 1).getY() * mScale,
-                                mFacePaint);
-                    }
+
+                    try {
+                        //Рисуем опорные точки
+                        for (int point = 0; point < points.size(); point++) {
+                            canvas.drawCircle(points.get(point).getX() * mScale,
+                                    points.get(point).getY() * mScale,
+                                    faceDotsScale,
+                                    mFacePaint);
+                        }
+                    } catch (Exception e) { }
+
+                    try {
+                        //Соединяем их
+                        for (int point = 0; point < points.size() - 1; point++) {
+                            canvas.drawLine(points.get(point).getX() * mScale,
+                                    points.get(point).getY() * mScale,
+                                    points.get(point + 1).getX() * mScale,
+                                    points.get(point + 1).getY() * mScale,
+                                    mFacePaint);
+                        }
+                    } catch (Exception e) { }
+
 
 
                 } else if(shape == 1) {//Замкнутая
-                    //Рисуем опорные точки
-                    for (int point = 0; point < points.size(); point++) {
-                        canvas.drawCircle(points.get(point).getX() * mScale,
-                                points.get(point).getY() * mScale,
-                                mFaceRadius / faceDotsScale,
+
+
+                    try {
+                        //Рисуем опорные точки
+                        for (int point = 0; point < points.size(); point++) {
+                            canvas.drawCircle(points.get(point).getX() * mScale,
+                                    points.get(point).getY() * mScale,
+                                    faceDotsScale,
+                                    mFacePaint);
+                        }
+                    } catch (Exception e) { }
+
+
+                    try {
+                        //Соединяем их
+                        for (int point = 0; point < points.size() - 1; point++) {
+                            canvas.drawLine(points.get(point).getX() * mScale,
+                                    points.get(point).getY() * mScale,
+                                    points.get(point + 1).getX() * mScale,
+                                    points.get(point + 1).getY() * mScale,
+                                    mFacePaint);
+                        }
+                    } catch (Exception e) { }
+
+
+                    try {
+                        //Соединяем первую и последнюю
+                        canvas.drawLine(points.get(0).getX() * mScale,
+                                points.get(0).getY() * mScale,
+                                points.get(points.size() - 1).getX() * mScale,
+                                points.get(points.size() - 1).getY() * mScale,
                                 mFacePaint);
-                    }
-                    //Соединяем их
-                    for (int point = 0; point < points.size() - 1; point++) {
-                        canvas.drawLine(points.get(point).getX() * mScale,
-                                points.get(point).getY() * mScale,
-                                points.get(point + 1).getX() * mScale,
-                                points.get(point + 1).getY() * mScale,
-                                mFacePaint);
-                    }
-                    //Соединяем первую и последнюю
-                    canvas.drawLine(points.get(0).getX() * mScale,
-                            points.get(0).getY() * mScale,
-                            points.get(points.size() - 1).getX() * mScale,
-                            points.get(points.size() - 1).getY() * mScale,
-                            mFacePaint);
+                    } catch (Exception e) { }
                 }
 
             }
@@ -324,11 +333,15 @@ public class FaceView extends View {
         if (mFaces != null) {
             for (FirebaseVisionFace face : mFaces) {
                 final Rect boundingBox = face.getBoundingBox();
-                canvas.drawRect(boundingBox.left * mScale,
-                        boundingBox.top * mScale,
-                        boundingBox.right * mScale,
-                        boundingBox.bottom * mScale,
-                        mStrokePaint);
+
+                try {
+                    canvas.drawRect(boundingBox.left * mScale,
+                            boundingBox.top * mScale,
+                            boundingBox.right * mScale,
+                            boundingBox.bottom * mScale,
+                            mStrokePaint);    
+                } catch (Exception e) {}
+
             }
         }
     }
@@ -341,7 +354,8 @@ public class FaceView extends View {
                 final Rect boundingBox = face.getBoundingBox();
                 faceHeight = boundingBox.height();
                 faceWidth = boundingBox.width();
-                faceDotsScale = (float) canvas.getWidth() / faceWidth;
+                faceDotsScale = (float) ((faceWidth / canvas.getWidth()) * 10 * 1.7);
+                Log.e("fjafjafdafpa", String.valueOf(faceDotsScale));
             }
         }
     }
@@ -351,7 +365,6 @@ public class FaceView extends View {
 
 
     void drawAll(Canvas canvas) {
-        getLandmark();
 
         drawFace(canvas, FACE, 1, Color.parseColor(ColorPink));//Контур лица
 

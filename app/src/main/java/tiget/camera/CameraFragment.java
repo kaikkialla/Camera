@@ -82,7 +82,10 @@ public class CameraFragment extends Fragment {
 
     private TextureView mTextureView; // для превью с камеры
     private FaceView mFaceView; // для контуров лиц
-    private TextView mTextView; // для результата Image Labeling
+
+    private TextView mLabelView; // для результата Image Labeling
+    private TextView mFaceInfoView; // для результата Image Labeling
+    private TextView mCameraSpeedInfo; // для результата Image Labeling
     ImageView mChangeCameraButton;
 
 
@@ -124,7 +127,11 @@ public class CameraFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         mTextureView = view.findViewById(R.id.texture_view);
         mFaceView = view.findViewById(R.id.face_view);
-        mTextView = view.findViewById(R.id.text_view);
+
+        mCameraSpeedInfo = view.findViewById(R.id.camera_speed_info);
+        mLabelView = view.findViewById(R.id.label);
+        mFaceInfoView = view.findViewById(R.id.face_info);
+
         mChangeCameraButton = view.findViewById(R.id.changeCamera);
 
         mChangeCameraButton.setTag(backCameraTag);
@@ -180,9 +187,9 @@ public class CameraFragment extends Fragment {
             getActivity().getSupportFragmentManager().beginTransaction().replace(R.id.f, new NoCameraPermissionFragment()).commit();
         }
 
-        //initFirebaseLabelDetector();
-        //initFirebaseFaceDetector();
-        initTenserflowDetecter();
+        initFirebaseLabelDetector();
+        initFirebaseFaceDetector();
+        //initTenserflowDetecter();
 
     }
 
@@ -237,7 +244,7 @@ public class CameraFragment extends Fragment {
                     getActivity().runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            mTextView.setText(result);
+                            mLabelView.setText(result);
                         }
                     });
                 }
@@ -320,8 +327,8 @@ public class CameraFragment extends Fragment {
                     , new CameraCaptureSession.CaptureCallback() {
                         @Override
                         public void onCaptureStarted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, long timestamp, long frameNumber) {
-                            //startFirebaseLabelDetecting();
-//                            startFirebaseFaceDetecting();
+                            startFirebaseLabelDetecting();
+                            startFirebaseFaceDetecting();
                         }
                     }
                     , mBackgroundHandler);
@@ -354,12 +361,14 @@ public class CameraFragment extends Fragment {
                     @Override
                     public void onSuccess(List<FirebaseVisionLabel> firebaseLabels) {
                         String result = (currentTimeMillis() - now) + "ms\n"; // в текстовое поле пишем время, которое потратили на запрос
+                        String object = "";
                         final List<String> labels = new ArrayList<>(); // создаём список пустой
                         for (FirebaseVisionLabel firebaseLabel : firebaseLabels) { // смотрим на то, что получили от ML Kit
                             // и пишем название предмета и его confidence
-                            result += firebaseLabel.getLabel() + " - " + firebaseLabel.getConfidence() + "\n";
+                            object += firebaseLabel.getLabel() + " - " + firebaseLabel.getConfidence() + "\n";
                         }
-                        //mTextView.setText(result); // отображаем из в TextView через запятую
+                        mCameraSpeedInfo.setText(result); // отображаем из в TextView через запятую
+                        mLabelView.setText(object);
                         processFirebaseLabelDetecting();
                     }
                 });
@@ -404,21 +413,22 @@ public class CameraFragment extends Fragment {
                     public void onSuccess(List<FirebaseVisionFace> firebaseFaces) {
                         Log.v(TAG, "processFirebaseFaceDetecting: time=" + (currentTimeMillis() - now) + "ms\n");
                         // рисуем контуры лиц
-                        //mFaceView.showFaces(firebaseFaces, 1 / FACE_IMAGE_SCALE);
                         mFaceView.showFaces(firebaseFaces, 1 / scale);
-                        processFirebaseFaceDetecting();
 
 
-                        if (firebaseFaces.size() > 0) {
-                            FirebaseVisionFace face = firebaseFaces.get(0);
-                            mTextView.setText(face.getSmilingProbability() + " / " + face.getLeftEyeOpenProbability() + " / " + face.getRightEyeOpenProbability());
+                        if (firebaseFaces != null) {
+                            for(FirebaseVisionFace face : firebaseFaces) {
+                                mFaceInfoView.setText("Left Eye: " + face.getLeftEyeOpenProbability() + "\n" +
+                                        "Right eye: " + face.getRightEyeOpenProbability() + "\n" +
+                                        "Smiling: " +face.getSmilingProbability());
+                            }
+
 
                         }
-
+                        processFirebaseFaceDetecting();
 
                     }
                 });
-
     }
 
 
